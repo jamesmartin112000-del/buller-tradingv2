@@ -1,0 +1,350 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function own(userId) { return signedIn() && request.auth.uid == userId; }
+    function authEmail() { return signedIn() ? request.auth.token.email : null; }
+    function ownerAccount() {
+      return signedIn() && (
+        request.auth.token.email == 'admin@buller.com' ||
+        request.auth.token.email == 'jamesmartin112000@gmail.com'
+      );
+    }
+
+    // Query-safe privileged check. Keep this function free of get(), exists(),
+    // and getAfter() because it is used by collection LIST rules.
+    function isAdminToken() {
+      return signedIn() && (
+        request.auth.token.role in ['admin', 'super_admin'] ||
+        ownerAccount()
+      );
+    }
+
+    // Single-document and write checks may consult the caller's profile.
+    // Never call these helpers from an `allow list` condition.
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function role() {
+      return hasProfile()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : 'user';
+    }
+    function admin() {
+      return signedIn() && (ownerAccount() || role() == 'admin' || role() == 'super_admin');
+    }
+    // Fixed-document lookup makes premium collection access dependent on the
+    // authoritative account status and server-evaluated request time.
+    function activeSubscription() {
+      return admin() || (hasProfile()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionActive == true
+        && (
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAll(['validityExpiresAt'])
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.validityExpiresAt is number
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.validityExpiresAt > request.time.toMillis())
+          || (!get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAll(['validityExpiresAt'])
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAll(['expiresAt'])
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.expiresAt is number
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.expiresAt > request.time.toMillis())
+        ));
+    }
+
+    function createsSafeUserProfile() {
+      return request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == 'user'
+        && (request.resource.data.status == 'active' || request.resource.data.status == 'pending')
+        && request.resource.data.approved == false
+        && request.resource.data.kycApproved == false
+        && request.resource.data.paymentApproved == false
+        && request.resource.data.subscriptionActive == false;
+    }
+
+    // Owner signup creates the profile with role 'super_admin' + full approval
+    // flags (see ensureUserDoc in userService.ts). Without this clause the
+    // first-login create is DENIED (role != 'user') unless admin() already
+    // covers it — this keeps the owner flow working even when the owner email
+    // is configured only in VITE_OWNER_EMAILS. Keep this allowlist in sync
+    // with VITE_OWNER_EMAILS and with userService.ts DEFAULT_OWNERS.
+    function createsSafeOwnerProfile() {
+      return ownerAccount()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == 'super_admin'
+        && request.resource.data.status == 'active'
+        && request.resource.data.approved == true
+        && request.resource.data.kycApproved == true
+        && request.resource.data.paymentApproved == true
+        && request.resource.data.subscriptionActive == true;
+    }
+
+    function preservesAccessControlFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'id', 'uid', 'email', 'role', 'status', 'approved', 'kycApproved',
+        'paymentApproved', 'paymentPending', 'subscriptionActive', 'maxDevices',
+        'expiresAt', 'validityDays', 'validityHours', 'validityStartedAt',
+        'validityExpiresAt', 'gateKeyId'
+      ]);
+    }
+    function updatesStartingCapitalOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['startingCapital', 'updatedAt'])
+        && request.resource.data.startingCapital is number
+        && request.resource.data.startingCapital > 0;
+    }
+    function validGateActivation(userId) {
+      return own(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'gateKeyId', 'approved', 'paymentApproved', 'paymentPending',
+          'subscriptionActive', 'status', 'validityDays', 'validityHours',
+          'validityStartedAt', 'validityExpiresAt', 'expiresAt'
+        ])
+        && request.resource.data.gateKeyId is string
+        && request.resource.data.status == 'active'
+        && request.resource.data.approved == true
+        && request.resource.data.paymentApproved == true
+        && request.resource.data.subscriptionActive == true
+        && request.resource.data.validityDays == getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.validityDays
+        && (
+          !getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.keys().hasAll(['validityHours'])
+          || request.resource.data.validityHours == getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.validityHours
+        )
+        && request.resource.data.expiresAt == getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.validityExpiresAt
+        && getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.email == authEmail()
+        && getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.used == true
+        && getAfter(/databases/$(database)/documents/master_keys/$(request.resource.data.gateKeyId)).data.validityExpiresAt > request.time.toMillis();
+    }
+
+    match /users/{userId} {
+      allow create: if admin()
+        || (own(userId) && createsSafeUserProfile())
+        || createsSafeOwnerProfile();
+      allow get: if own(userId) || admin();
+      allow list: if isAdminToken();
+      allow update: if admin() || validGateActivation(userId)
+        || (own(userId) && (preservesAccessControlFields() || updatesStartingCapitalOnly()));
+      allow delete: if admin();
+
+      match /devices/{deviceId} {
+        allow get: if own(userId) || admin();
+        allow list: if own(userId) || isAdminToken();
+        allow create, update: if own(userId) || admin();
+        allow delete: if own(userId) || admin();
+      }
+    }
+
+    match /deleted_users/{userId} {
+      allow get: if own(userId) || admin();
+      allow list: if isAdminToken();
+      allow write: if admin();
+    }
+
+    match /access_requests/{requestId} {
+      allow create: if request.resource.data.status == 'pending'
+        && request.resource.data.email is string
+        && request.resource.data.name is string
+        && (
+          (request.resource.data.requestType == 'demo'
+            && request.resource.data.passwordValidated == true
+            && request.resource.data.whatsapp is string
+            && request.resource.data.whatsapp.size() >= 8
+            && request.resource.data.createdAt is number
+            && request.resource.data.keys().hasOnly([
+              'requestType', 'email', 'name', 'whatsapp', 'reason',
+              'passwordValidated', 'status', 'createdAt'
+            ]))
+          ||
+          (signedIn()
+            && request.resource.data.email == authEmail()
+            && request.resource.data.keys().hasOnly([
+              'email', 'name', 'reason', 'whatsapp', 'requestedPlan',
+              'agreedToRules', 'status', 'createdAt'
+            ]))
+        );
+      allow get: if admin() || (signedIn() && resource.data.email == authEmail());
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.email == authEmail());
+      allow update, delete: if admin();
+    }
+
+    match /payment_proofs/{paymentId} {
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == authEmail()
+        && request.resource.data.status == 'pending';
+      allow get: if admin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if admin();
+    }
+
+    match /master_keys/{keyId} {
+      allow get: if admin() || (signedIn() && resource.data.email == authEmail());
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.email == authEmail());
+      allow create, delete: if admin();
+      allow update: if admin() || (signedIn()
+        && resource.data.email == authEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['used', 'usedAt', 'validityExpiresAt'])
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.key == resource.data.key
+        && request.resource.data.validityDays == resource.data.validityDays
+        && request.resource.data.used == true
+        && request.resource.data.usedAt is number
+        && request.resource.data.validityExpiresAt > request.time.toMillis()
+        && (
+          (resource.data.used == true
+            && request.resource.data.usedAt == resource.data.usedAt
+            && request.resource.data.validityExpiresAt == resource.data.validityExpiresAt)
+          ||
+          (request.resource.data.usedAt >= request.time.toMillis() - 300000
+            && request.resource.data.usedAt <= request.time.toMillis() + 300000
+            && request.resource.data.validityExpiresAt <= request.time.toMillis()
+              + (resource.data.keys().hasAll(['validityHours'])
+                ? resource.data.validityHours * 3600000
+                : resource.data.validityDays * 86400000)
+              + 300000)
+        ));
+    }
+
+    match /wallet_addresses/{walletId} { allow read: if true; allow write: if admin(); }
+    match /content/{contentId} { allow read: if true; allow write: if admin(); }
+    match /plans/{planId} { allow read: if true; allow write: if admin(); }
+    match /news/{newsId} { allow read: if true; allow write: if admin(); }
+    match /signals/{signalId} { allow read: if activeSubscription(); allow write: if admin(); }
+    match /calendar/{eventId} { allow read: if activeSubscription(); allow write: if admin(); }
+    match /settings/{settingId} { allow read: if activeSubscription(); allow write: if admin(); }
+
+    match /notifications/{notificationId} {
+      allow get: if admin()
+        || (signedIn() && (resource.data.targetEmail == authEmail()
+          || resource.data.target == 'broadcast'));
+      allow list: if isAdminToken()
+        || (signedIn() && (resource.data.targetEmail == authEmail()
+          || resource.data.target == 'broadcast'));
+      allow create: if admin() || (signedIn()
+        && (request.resource.data.target == 'admin'
+          || request.resource.data.targetEmail == authEmail()));
+      allow update, delete: if admin()
+        || (signedIn() && resource.data.targetEmail == authEmail());
+    }
+
+    match /devices/{deviceId} {
+      allow get: if admin()
+        || (signedIn() && resource.data.userEmail == authEmail());
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.userEmail == authEmail());
+      allow create: if signedIn()
+        && request.resource.data.userEmail == authEmail();
+      allow update: if admin() || (signedIn()
+        && resource.data.userEmail == authEmail()
+        && request.resource.data.userEmail == resource.data.userEmail);
+      allow delete: if admin();
+    }
+
+    match /deviceChangeRequests/{requestId} {
+      allow get: if admin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if admin();
+    }
+
+    match /chat_threads/{threadId} {
+      allow get: if admin()
+        || (signedIn() && resource.data.userEmail == authEmail());
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.userEmail == authEmail());
+      allow create: if signedIn()
+        && request.resource.data.userEmail == authEmail();
+      allow update: if admin()
+        || (signedIn() && resource.data.userEmail == authEmail());
+      allow delete: if admin();
+    }
+
+    match /chat_messages/{messageId} {
+      allow get: if admin() || (signedIn()
+        && get(/databases/$(database)/documents/chat_threads/$(resource.data.threadId)).data.userEmail == authEmail());
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.threadId == authEmail());
+      allow create: if admin() || (signedIn()
+        && request.resource.data.from == 'user'
+        && get(/databases/$(database)/documents/chat_threads/$(request.resource.data.threadId)).data.userEmail == authEmail());
+      allow update, delete: if admin();
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isAdminToken() || admin();
+      allow list: if isAdminToken();
+      allow write: if admin();
+    }
+
+    match /wallets/{walletId} {
+      allow get: if admin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if admin();
+    }
+
+    match /journals/{journalId} {
+      allow get: if admin()
+        || (activeSubscription() && resource.data.userId == request.auth.uid);
+      allow list: if isAdminToken()
+        || (activeSubscription() && resource.data.userId == request.auth.uid);
+      allow create: if activeSubscription()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if admin()
+        || (activeSubscription() && resource.data.userId == request.auth.uid);
+    }
+
+    match /trades/{tradeId} {
+      allow get: if (activeSubscription() && own(resource.data.userId)) || admin();
+      allow list: if isAdminToken()
+        || (activeSubscription() && resource.data.userId == request.auth.uid);
+      allow create: if activeSubscription() && own(request.resource.data.userId);
+      allow update: if (activeSubscription() && own(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId) || admin();
+      allow delete: if (activeSubscription() && own(resource.data.userId)) || admin();
+    }
+
+    match /journal_settings/{userId} {
+      allow get: if (activeSubscription() && own(userId)) || admin();
+      allow list: if (activeSubscription() && own(userId)) || isAdminToken();
+      allow create, update, delete: if (activeSubscription() && own(userId)) || admin();
+    }
+
+    match /audit_logs/{logId} {
+      allow get: if isAdminToken() || admin();
+      allow list: if isAdminToken();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /ai_settings/{userId} {
+      allow get: if isAdminToken() || admin();
+      allow list: if isAdminToken();
+      allow write: if admin();
+    }
+
+    match /ai_usage/{usageId} {
+      allow get: if admin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdminToken()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow get: if isAdminToken() || admin();
+      allow list: if isAdminToken();
+      allow write: if admin();
+    }
+  }
+}

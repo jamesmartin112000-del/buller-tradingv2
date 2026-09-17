@@ -1,0 +1,294 @@
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+:root {
+  --bg: #061f16;
+  --bg2: #08281c;
+  --bg3: #0a3022;
+  --card: #0c3526;
+  --panel: #10402e;
+  --border: rgba(226, 191, 118, 0.28);
+  --border2: rgba(226, 191, 118, 0.52);
+  --text: #f3f1e9;
+  --text2: #c6c9bf;
+  --text3: #92998e;
+  --buy: #56b887;
+  --buy-dim: rgba(86, 184, 135, 0.14);
+  --sell: #e07171;
+  --sell-dim: rgba(224, 113, 113, 0.14);
+  --brand: #e2bf76;
+  --warn: #d6a85c;
+  --blue: #7ca6a0;
+  --purple: #9b91aa;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  min-height: 100%;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(0, 0, 0, 0.52), transparent 55%),
+    radial-gradient(ellipse at 80% 100%, rgba(0, 0, 0, 0.46), transparent 50%),
+    linear-gradient(rgba(3, 21, 14, 0.24), rgba(3, 21, 14, 0.24)),
+    #0b3c29;
+  background-attachment: fixed;
+}
+.font-mono {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-feature-settings: 'tnum', 'zero';
+}
+.numeric-value {
+  min-width: max-content;
+  max-width: 100%;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'zero';
+}
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4a5a;
+}
+/* Restrained gold elevation for primary, security, and integration states. */
+.brand-glow {
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(226, 191, 118, 0.06);
+}
+.text-glow-red {
+  text-shadow: none;
+}
+/* Keep readable dark text when older surfaces pair a solid gold token with text-white. */
+[class~='bg-brand'][class~='text-white'] {
+  color: var(--bg) !important;
+}
+.dot-pulse {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.flash {
+  animation: flash 1.8s ease-in-out infinite;
+}
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(226, 191, 118, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 191, 118, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.hero-gradient {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(226, 191, 118, 0.08), transparent 42%),
+    radial-gradient(ellipse at 80% 100%, rgba(0, 0, 0, 0.45), transparent 50%),
+    #0b3c29;
+}
+.hero-atmosphere {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #062b20;
+  isolation: isolate;
+}
+.hero-atmosphere__smoke {
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(circle at 24% 32%, rgba(45, 91, 67, 0.3), transparent 31%),
+    radial-gradient(circle at 74% 64%, rgba(0, 0, 0, 0.5), transparent 38%),
+    #062b20;
+  filter: blur(12px);
+  opacity: 0.94;
+}
+.hero-atmosphere__image-frame {
+  position: absolute;
+  inset: 2rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-atmosphere__image {
+  width: min(76vw, 20rem);
+  max-height: 88%;
+  object-fit: contain;
+  opacity: 0.24;
+  filter: saturate(0.68) sepia(0.1) blur(0.35px);
+  transform: translate3d(0, 0, 0) scale(0.98);
+  animation: heroAtmosphereDrift 11s cubic-bezier(0.25, 1, 0.5, 1) infinite alternate;
+}
+.hero-atmosphere__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(226, 191, 118, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 191, 118, 0.045) 1px, transparent 1px);
+  background-size: 12px 12px;
+  opacity: 0.34;
+}
+.hero-atmosphere__grid--focus {
+  background-image:
+    linear-gradient(rgba(240, 216, 155, 0.34) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240, 216, 155, 0.34) 1px, transparent 1px);
+  -webkit-mask-image: radial-gradient(190px circle at var(--hero-pointer-x) var(--hero-pointer-y), black 0%, transparent 72%);
+  mask-image: radial-gradient(190px circle at var(--hero-pointer-x) var(--hero-pointer-y), black 0%, transparent 72%);
+  opacity: var(--hero-grid-focus);
+  transition: opacity 220ms ease;
+}
+@keyframes heroAtmosphereDrift {
+  from { transform: translate3d(-5px, 4px, 0) scale(0.98); }
+  to { transform: translate3d(5px, -4px, 0) scale(1); }
+}
+@media (min-width: 640px) {
+  .hero-atmosphere__image-frame { inset: 2.75rem 3rem; }
+  .hero-atmosphere__image { width: min(44vw, 35rem); max-height: 86%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-atmosphere__image { animation: none; transform: none; }
+  .hero-atmosphere__grid--focus { display: none; }
+}
+.hero-logo-watermark {
+  opacity: 0.075;
+}
+.hero-logo-watermark__mark {
+  transform: translate3d(0, 0, 0) rotate(-8deg);
+  animation: heroLogoFloat 9s cubic-bezier(0.25, 1, 0.5, 1) infinite alternate;
+}
+.hero-logo-watermark__logo {
+  transform: scale(1);
+}
+.hero-logo-watermark--large .hero-logo-watermark__logo {
+  transform: scale(1.55);
+}
+@keyframes heroLogoFloat {
+  from { transform: translate3d(-12px, 8px, 0) rotate(-8deg) scale(0.96); }
+  to { transform: translate3d(12px, -8px, 0) rotate(-3deg) scale(1.02); }
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+input,
+button,
+select,
+textarea {
+  font-family: inherit;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+/* Touch sizing is applied by shared controls and navigation buttons instead
+   of globally, so compact terminal chips and data-grid controls keep their
+   intended density without overflowing. */
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+.metallic-hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e2bf76, transparent);
+}
+/* Loading shimmer */
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+/* Minimal desktop pointer enhancement. */
+/* The cursor component toggles this class on <body> only on non-touch
+   devices, so touch users always keep their native cursor. */
+body.mp-custom-cursor-active,
+body.mp-custom-cursor-active * {
+  cursor: none !important;
+}
+.mp-cursor-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483647; /* always on top of everything */
+}
+/* Core dot — small and solid with no glow. */
+.mp-cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #e2bf76;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition: opacity 0.18s ease, transform 0.08s ease;
+}
+/* Thin metallic follow ring. */
+.mp-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 191, 118, 0.62);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition: opacity 0.18s ease;
+}
+@media (max-width: 767px) {
+  body { background-attachment: scroll; }
+  .brand-glow { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22); }
+  .hero-logo-watermark__mark { transform: scale(0.72) rotate(-6deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .hero-logo-watermark__mark { transform: none; }
+  .mp-cursor-dot,
+  .mp-cursor-ring { transition: none; }
+}
