@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bullertradingv2.vercel.app/sitemap.xml
+Sitemap: https://bullertrading.vercel.app/sitemap.xml
